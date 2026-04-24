@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-##$)j!@jou$*8^&412=-otmk5#pjcdv0wffb=aayugp77b8$dq
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['chaty-d4g2.onrender.com']
+ALLOWED_HOSTS = ['https://chaty-d4g2.onrender.com']
 
 
 # Application definition
