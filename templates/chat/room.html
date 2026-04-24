@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{# Remove default main padding — chat takes 100% of available height #}
+{% block main_class %}w-full h-full p-0{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-full w-full sm:max-w-3xl sm:mx-auto sm:my-3 sm:rounded-2xl sm:border sm:border-slate-700 sm:shadow-xl overflow-hidden bg-slate-800">
+
+    <!-- ─── Header ─── -->
+    <div class="flex-shrink-0 flex items-center gap-3 px-3 py-3 sm:px-5 sm:py-4 border-b border-slate-700 bg-slate-800/90 backdrop-blur-sm">
+
+        <!-- Back -->
+        <a href="{% url 'inbox' %}" class="flex-shrink-0 text-slate-400 hover:text-white transition-colors p-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+        </a>
+
+        <!-- Avatar -->
+        <a href="{% url 'user_profile' other_user.username %}" class="flex-shrink-0">
+            {% if other_user.profile.avatar %}
+                <img src="{{ other_user.profile.avatar.url }}" alt="{{ other_user.username }}"
+                     class="h-10 w-10 rounded-full object-cover border-2 border-indigo-500">
+            {% else %}
+                <div class="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-base border-2 border-indigo-500">
+                    {{ other_user.username|make_list|first|upper }}
+                </div>
+            {% endif %}
+        </a>
+
+        <!-- Name -->
+        <div class="min-w-0 flex-1">
+            <a href="{% url 'user_profile' other_user.username %}"
+               class="block font-semibold text-white hover:text-indigo-300 transition-colors truncate text-sm sm:text-base leading-tight">
+                {{ other_user.username }}
+            </a>
+            <span class="text-xs text-slate-400 leading-none">Voir le profil</span>
+        </div>
+    </div>
+
+    <!-- ─── Messages ─── -->
+    <div id="chat-log"
+         class="flex-1 overflow-y-auto flex flex-col gap-2 sm:gap-3 px-3 py-3 sm:px-5 sm:py-4 bg-slate-900/60">
+        {% for msg in messages %}
+            <div class="max-w-[85%] sm:max-w-[72%] px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-sm sm:text-base leading-relaxed break-words animate-fade-in-up
+                {% if msg.sender == user %}
+                    self-end bg-indigo-600 text-white rounded-br-sm
+                {% else %}
+                    self-start bg-slate-700 text-slate-100 rounded-bl-sm border border-slate-600
+                {% endif %}">
+                {{ msg.text }}
+            </div>
+        {% empty %}
+            <div class="m-auto flex flex-col items-center text-slate-500 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                <p class="text-sm">Commencez la conversation !</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- ─── Input ─── -->
+    <div class="flex-shrink-0 px-3 py-3 sm:px-5 sm:py-4 border-t border-slate-700 bg-slate-800">
+        <div class="flex items-center gap-2">
+            <input
+                id="chat-message-input"
+                type="text"
+                placeholder="Écrire un message..."
+                autocomplete="off"
+                class="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded-full px-4 sm:px-5 py-2.5 sm:py-3 text-sm sm:text-base text-slate-100 placeholder-slate-500
+                       focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+            >
+            <button
+                id="chat-message-submit"
+                class="flex-shrink-0 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-full p-2.5 sm:p-3 transition-all shadow-md"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+{{ other_user.id|json_script:"other-user-id" }}
+{{ user.id|json_script:"user-id" }}
+
+<style>
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
+</style>
+
+<script>
+    const otherUserId = JSON.parse(document.getElementById('other-user-id').textContent);
+    const userId      = JSON.parse(document.getElementById('user-id').textContent);
+    const chatLog     = document.getElementById('chat-log');
+
+    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const ws    = new WebSocket(proto + location.host + '/ws/chat/' + otherUserId + '/');
+
+    // Scroll to bottom on load
+    chatLog.scrollTop = chatLog.scrollHeight;
+
+    ws.onmessage = function (e) {
+        const data   = JSON.parse(e.data);
+        const isSent = data.sender_id === userId;
+
+        const div = document.createElement('div');
+        div.className = [
+            'max-w-[85%] sm:max-w-[72%] px-3 py-2 rounded-2xl text-sm leading-relaxed break-words animate-fade-in-up',
+            isSent
+                ? 'self-end bg-indigo-600 text-white rounded-br-sm'
+                : 'self-start bg-slate-700 text-slate-100 rounded-bl-sm border border-slate-600'
+        ].join(' ');
+        div.textContent = data.message;
+
+        chatLog.appendChild(div);
+        chatLog.scrollTop = chatLog.scrollHeight;
+    };
+
+    ws.onclose = () => console.warn('WebSocket closed');
+    ws.onerror = (e) => console.error('WebSocket error', e);
+
+    const input  = document.getElementById('chat-message-input');
+    const btn    = document.getElementById('chat-message-submit');
+
+    input.focus();
+
+    const sendMsg = () => {
+        const text = input.value.trim();
+        if (text && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ message: text }));
+            input.value = '';
+        }
+    };
+
+    input.addEventListener('keyup', e => { if (e.key === 'Enter') sendMsg(); });
+    btn.addEventListener('click', sendMsg);
+</script>
+{% endblock %}
